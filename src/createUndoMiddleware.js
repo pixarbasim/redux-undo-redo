@@ -2,7 +2,7 @@ import {get, includes} from 'lodash'
 import {addUndoItem} from './actions'
 import {getUndoItem, getRedoItem} from './selectors'
 
-export default function createUndoMiddleware({getViewState, setViewState, revertingActions}) {
+export default function createUndoMiddleware({getViewState, setViewState, revertingActions, forwardingActions}) {
 
   if(Object.values(revertingActions).some(revertingAction => revertingAction.meta)){
     console.warn('[redux-undo-redo] The "meta" property in reverting actions is deprecated and replaced with "createArgs" and will be removed in future versions.')
@@ -32,7 +32,8 @@ export default function createUndoMiddleware({getViewState, setViewState, revert
       if (redoItem) {
         acting = true
         setViewState && dispatch(setViewState(redoItem.beforeState))
-        dispatch(redoItem.action)
+        dispatch(getRedoAction(redoItem))
+        setViewState && dispatch(setViewState(redoItem.afterState))
         acting = false
       }
     }
@@ -58,6 +59,17 @@ export default function createUndoMiddleware({getViewState, setViewState, revert
     const actionCreator = get(revertingActions[type], 'action', revertingActions[type])
     if (!actionCreator) {
       throw new Error(`Illegal reverting action definition for '${type}'`)
+    }
+    return actionCreator(action, args)
+  }
+
+  function getRedoAction(redoItem) {
+    const {action, args} = redoItem
+    const {type} = action
+    const actionCreator = get(forwardingActions[type], 'action', forwardingActions[type])
+    if (!actionCreator) {
+      //If forwarding action is not defined, dispatch the action type
+      return redoItem.action
     }
     return actionCreator(action, args)
   }
